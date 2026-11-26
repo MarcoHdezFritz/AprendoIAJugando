@@ -20,8 +20,8 @@ import androidx.compose.foundation.layout.padding
 
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,9 +37,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import cl.triskeledu.aprendoiajugando.models.Lugar
+import cl.triskeledu.aprendoiajugando.viewmodel.LugarViewModel
 
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -49,15 +51,12 @@ import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 
-import cl.triskeledu.aprendoiajugando.database.PlayerDatabaseHelper
-import cl.triskeledu.aprendoiajugando.models.TouristPoint
-
 // --------------------------------------------------
 // MARCADORES PERSONALIZADOS
 // --------------------------------------------------
 
 private class TouristPointsOverlay(
-    private val points: List<TouristPoint>,
+    private val points: List<Lugar>,
     private val onPointClick: (String) -> Unit
 ) : Overlay() {
 
@@ -84,9 +83,10 @@ private class TouristPointsOverlay(
         val screenPoint = Point()
 
         points.forEach { point ->
+
             val geoPoint = GeoPoint(
-                point.latitude,
-                point.longitude
+                point.latitud,
+                point.longitud
             )
 
             mapView.projection.toPixels(
@@ -121,8 +121,8 @@ private class TouristPointsOverlay(
         for (point in points) {
 
             val geoPoint = GeoPoint(
-                point.latitude,
-                point.longitude
+                point.latitud,
+                point.longitud
             )
 
             mapView.projection.toPixels(
@@ -136,7 +136,9 @@ private class TouristPointsOverlay(
             val distanceSquared = dx * dx + dy * dy
 
             if (distanceSquared <= maxDistance * maxDistance) {
-                onPointClick(point.name)
+
+                onPointClick(point.nombre)
+
                 return true
             }
         }
@@ -146,14 +148,17 @@ private class TouristPointsOverlay(
 }
 
 // --------------------------------------------------
-// PANTALLA DEL MAPA
+// MAPA PERSONALIZADO
 // --------------------------------------------------
 
-private class FixedMapView(context: android.content.Context) :
-    MapView(context) {
+private class FixedMapView(
+    context: android.content.Context
+) : MapView(context) {
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+
         when (ev.action) {
+
             MotionEvent.ACTION_DOWN,
             MotionEvent.ACTION_MOVE -> {
                 parent?.requestDisallowInterceptTouchEvent(true)
@@ -169,19 +174,25 @@ private class FixedMapView(context: android.content.Context) :
     }
 }
 
+// --------------------------------------------------
+// PANTALLA DEL MAPA
+// --------------------------------------------------
+
 @Composable
 fun MapScreen(
     onPointClick: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    lugarViewModel: LugarViewModel = viewModel()
 ) {
 
     val context = LocalContext.current
-    val appContext = context.applicationContext
 
-    var touristPoints by remember {
-        mutableStateOf<List<TouristPoint>>(emptyList())
-    }
+    // Estado del ViewModel
+    val uiState by lugarViewModel.uiState.collectAsStateWithLifecycle()
 
+    val touristPoints = uiState.lugares
+
+    // Referencias al mapa y ubicación
     var mapView by remember {
         mutableStateOf<MapView?>(null)
     }
@@ -190,16 +201,15 @@ fun MapScreen(
         mutableStateOf<MyLocationNewOverlay?>(null)
     }
 
-    // Cargar puntos turísticos desde SQLite.
+    // Cargar lugares desde Spring Boot
     LaunchedEffect(Unit) {
-        touristPoints = withContext(Dispatchers.IO) {
-            PlayerDatabaseHelper(appContext)
-                .getTouristPoints()
-                .filter { it.active }
-        }
+        lugarViewModel.cargarLugares()
     }
 
-    // Activar ubicación después de recibir permisos.
+    // --------------------------------------------------
+    // PERMISOS DE UBICACIÓN
+    // --------------------------------------------------
+
     val locationPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -210,6 +220,7 @@ fun MapScreen(
                         permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
 
             if (granted) {
+
                 locationOverlay?.enableMyLocation(
                     GpsMyLocationProvider(context)
                 )
@@ -218,7 +229,7 @@ fun MapScreen(
             }
         }
 
-    // Mostrar ubicación del jugador.
+    // Mostrar ubicación del jugador
     fun showMyLocation() {
 
         val fineGranted = ContextCompat.checkSelfPermission(
@@ -250,7 +261,10 @@ fun MapScreen(
         }
     }
 
-    // Ciclo de vida del mapa.
+    // --------------------------------------------------
+    // CICLO DE VIDA DEL MAPA
+    // --------------------------------------------------
+
     val currentMapView = mapView
 
     DisposableEffect(currentMapView) {
@@ -262,6 +276,10 @@ fun MapScreen(
             currentMapView?.onDetach()
         }
     }
+
+    // --------------------------------------------------
+    // INTERFAZ
+    // --------------------------------------------------
 
     Column(
         modifier = Modifier.fillMaxSize()
@@ -298,7 +316,7 @@ fun MapScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        "Volver",
+                        text = "Volver",
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -308,14 +326,55 @@ fun MapScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        "Mi ubicación",
+                        text = "Mi ubicación",
                         color = androidx.compose.ui.graphics.Color.White
                     )
                 }
             }
         }
 
-        // MAPA OPENSTREETMAP
+        // ESTADO DE LOS LUGARES
+        when {
+
+            uiState.isLoading -> {
+
+                Text(
+                    text = "Cargando lugares...",
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+
+            uiState.errorMessage != null -> {
+
+                Text(
+                    text = "Error: ${uiState.errorMessage}",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                OutlinedButton(
+                    onClick = {
+                        lugarViewModel.cargarLugares()
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) {
+                    Text("Reintentar")
+                }
+            }
+
+            else -> {
+
+                Text(
+                    text = "Puntos turísticos disponibles: ${touristPoints.size}",
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+        }
+
+        // --------------------------------------------------
+        // OPENSTREETMAP
+        // --------------------------------------------------
+
         AndroidView(
             modifier = Modifier
                 .fillMaxWidth()
@@ -323,7 +382,7 @@ fun MapScreen(
 
             factory = { viewContext ->
 
-                // Configuración de osmdroid.
+                // Configuración osmdroid
                 Configuration.getInstance().load(
                     viewContext,
                     android.preference.PreferenceManager
@@ -355,8 +414,9 @@ fun MapScreen(
                         GeoPoint(-33.4390, -70.6490)
                     )
 
-                    // Proveedor de ubicación.
-                    val gpsProvider = GpsMyLocationProvider(viewContext)
+                    // Proveedor de ubicación GPS
+                    val gpsProvider =
+                        GpsMyLocationProvider(viewContext)
 
                     val overlay = MyLocationNewOverlay(
                         gpsProvider,
@@ -373,12 +433,12 @@ fun MapScreen(
 
             update = { map ->
 
-                // Evitar duplicar los marcadores.
+                // Eliminar marcadores anteriores
                 map.overlays.removeAll {
                     it is TouristPointsOverlay
                 }
 
-                // Agregar los puntos turísticos.
+                // Agregar lugares recibidos desde Spring Boot
                 if (touristPoints.isNotEmpty()) {
 
                     map.overlays.add(

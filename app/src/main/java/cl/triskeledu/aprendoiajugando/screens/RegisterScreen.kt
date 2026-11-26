@@ -1,3 +1,4 @@
+
 package cl.triskeledu.aprendoiajugando.screens
 
 import androidx.compose.foundation.background
@@ -25,10 +26,30 @@ fun RegisterScreen(
     var phone by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf("") }
+
+    var showErrors by remember { mutableStateOf(false) }
 
     val blue = Color(0xFF2878D0)
     val navy = Color(0xFF102A43)
+
+    // Validaciones individuales
+    val nameInvalid = name.isBlank()
+
+    val emailInvalid = !android.util.Patterns.EMAIL_ADDRESS
+        .matcher(email.trim()).matches()
+
+    val phoneInvalid = phone.isBlank() ||
+            phone.count { it.isDigit() } < 8
+
+    val addressInvalid = address.isBlank()
+
+    val passwordInvalid = password.length < 6
+
+    val formInvalid = nameInvalid ||
+            emailInvalid ||
+            phoneInvalid ||
+            addressInvalid ||
+            passwordInvalid
 
     Column(
         modifier = Modifier
@@ -56,48 +77,71 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Nombre
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
             label = { Text("Nombre completo") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            isError = name.isBlank()
+            isError = showErrors && nameInvalid
         )
+
+        if (showErrors && nameInvalid) {
+            ErrorText("Ingresa tu nombre.")
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Correo
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
             label = { Text("Correo electrónico") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            isError = email.isNotBlank() && !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+            isError = showErrors && emailInvalid
         )
+
+        if (showErrors && emailInvalid) {
+            ErrorText("Ingresa un correo electrónico válido.")
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Teléfono
         OutlinedTextField(
             value = phone,
             onValueChange = { phone = it },
             label = { Text("Teléfono") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            isError = showErrors && phoneInvalid
         )
+
+        if (showErrors && phoneInvalid) {
+            ErrorText("Ingresa un teléfono con al menos 8 dígitos.")
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Dirección
         OutlinedTextField(
             value = address,
             onValueChange = { address = it },
             label = { Text("Dirección") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            isError = showErrors && addressInvalid
         )
+
+        if (showErrors && addressInvalid) {
+            ErrorText("Ingresa tu dirección.")
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Contraseña
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
@@ -105,30 +149,27 @@ fun RegisterScreen(
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            isError = password.isNotEmpty() && password.length < 6
+            isError = showErrors && passwordInvalid
         )
+
+        if (showErrors && passwordInvalid) {
+            ErrorText("La contraseña debe tener al menos 6 caracteres.")
+        }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        if (error.isNotEmpty()) {
-            Text(error, color = Color.Red)
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
         Button(
             onClick = {
-                error = when {
-                    name.isBlank() -> "Ingresa tu nombre."
-                    !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() ->
-                        "Ingresa un correo válido."
-                    phone.isBlank() -> "Ingresa tu teléfono."
-                    address.isBlank() -> "Ingresa tu dirección."
-                    password.length < 6 -> "La contraseña debe tener al menos 6 caracteres."
-                    else -> ""
-                }
+                showErrors = true
 
-                if (error.isEmpty()) {
-                    onRegister(name, email, phone, address, password)
+                if (!formInvalid) {
+                    onRegister(
+                        name.trim(),
+                        email.trim(),
+                        phone.trim(),
+                        address.trim(),
+                        password
+                    )
                 }
             },
             modifier = Modifier
@@ -139,11 +180,26 @@ fun RegisterScreen(
                 containerColor = blue
             )
         ) {
-            Text("REGISTRARME", fontWeight = FontWeight.Bold)
+            Text(
+                "REGISTRARME",
+                fontWeight = FontWeight.Bold
+            )
         }
 
         TextButton(onClick = onBack) {
             Text("← Volver")
         }
     }
+}
+
+@Composable
+private fun ErrorText(message: String) {
+    Text(
+        text = message,
+        color = Color.Red,
+        fontSize = 12.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, top = 4.dp)
+    )
 }

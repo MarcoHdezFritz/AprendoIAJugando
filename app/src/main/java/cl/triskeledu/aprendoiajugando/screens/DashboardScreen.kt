@@ -38,7 +38,7 @@ fun DashboardScreen(
         delay(150)
         showProgress = true
 
-        for (i in 1..7) {
+        for (i in 1..8) {
             delay(100)
             visibleCards = i
         }
@@ -129,6 +129,7 @@ fun DashboardScreen(
         Spacer(Modifier.height(12.dp))
 
         val options = listOf(
+            Triple("🔔", "Notificaciones", "notifications"),
             Triple("🗺️", "Mapa de Santiago", "map"),
             Triple("📷", "Escanear código QR", "scanner"),
             Triple("🤳", "Selfie turística", "selfie"),

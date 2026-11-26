@@ -1,3 +1,4 @@
+
 package cl.triskeledu.aprendoiajugando.screens
 
 import android.Manifest
@@ -22,13 +23,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 
 @Composable
 fun SelfieScreen(
-    onCapture: (String) -> Unit,
+    onCapture: (String, Double, Double) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    val fusedLocationClient = remember {
+        LocationServices.getFusedLocationProviderClient(context)
+    }
 
     var hasPermission by remember {
         mutableStateOf(
@@ -39,11 +48,28 @@ fun SelfieScreen(
         )
     }
 
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasPermission = granted
     }
+
+    val locationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { permissions ->
+            hasLocationPermission =
+                permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        }
 
     LaunchedEffect(Unit) {
         if (!hasPermission) {
@@ -51,9 +77,17 @@ fun SelfieScreen(
         }
     }
 
-    var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
-    var isTakingPhoto by remember { mutableStateOf(false) }
-    var cameraError by remember { mutableStateOf<String?>(null) }
+    var imageCapture by remember {
+        mutableStateOf<ImageCapture?>(null)
+    }
+
+    var isTakingPhoto by remember {
+        mutableStateOf(false)
+    }
+
+    var cameraError by remember {
+        mutableStateOf<String?>(null)
+    }
 
     Column(
         modifier = Modifier
@@ -103,7 +137,7 @@ fun SelfieScreen(
                             cameraProvider.unbindAll()
 
                             cameraProvider.bindToLifecycle(
-                                context as androidx.lifecycle.LifecycleOwner,
+                                lifecycleOwner,
                                 CameraSelector.DEFAULT_FRONT_CAMERA,
                                 preview,
                                 capture
@@ -133,13 +167,26 @@ fun SelfieScreen(
         }
 
         cameraError?.let {
-            Text(it, color = MaterialTheme.colorScheme.error)
+            Text(
+                it,
+                color = MaterialTheme.colorScheme.error
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
         Button(
             onClick = {
+                if (!hasLocationPermission) {
+                    locationPermissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                    return@Button
+                }
+
                 val capture = imageCapture
 
                 if (capture == null || isTakingPhoto) {
@@ -147,62 +194,104 @@ fun SelfieScreen(
                 }
 
                 isTakingPhoto = true
+                cameraError = null
 
-                val values = ContentValues().apply {
-                    put(
-                        MediaStore.Images.Media.DISPLAY_NAME,
-                        "Selfie_Triskeledu_${System.currentTimeMillis()}.jpg"
-                    )
-                    put(
-                        MediaStore.Images.Media.MIME_TYPE,
-                        "image/jpeg"
-                    )
-                    put(
-                        MediaStore.Images.Media.RELATIVE_PATH,
-                        "Pictures/AprendoIAJugando"
-                    )
-                }
+                try {
+                    val cancellationToken = CancellationTokenSource()
 
-                val outputOptions =
-                    ImageCapture.OutputFileOptions.Builder(
-                        context.contentResolver,
-                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                        values
-                    ).build()
+                    fusedLocationClient.getCurrentLocation(
+                        Priority.PRIORITY_HIGH_ACCURACY,
+                        cancellationToken.token
+                    ).addOnSuccessListener { location ->
 
-                capture.takePicture(
-                    outputOptions,
-                    ContextCompat.getMainExecutor(context),
-                    object : ImageCapture.OnImageSavedCallback {
-
-                        override fun onImageSaved(
-                            outputFileResults: ImageCapture.OutputFileResults
-                        ) {
-                            isTakingPhoto = false
-
-                            val uri = outputFileResults.savedUri
-
-                            if (uri != null) {
-                                onCapture(uri.toString())
-                            } else {
-                                cameraError =
-                                    "La foto se guardó, pero no se pudo obtener su ubicación."
-                            }
-                        }
-
-                        override fun onError(exception: ImageCaptureException) {
+                        if (location == null) {
                             isTakingPhoto = false
                             cameraError =
-                                "Error al tomar la fotografía: ${exception.message}"
+                                "No se pudo obtener tu ubicación. Activa el GPS e inténtalo nuevamente."
+                            return@addOnSuccessListener
                         }
+
+                        if (location.accuracy > 50f) {
+                            isTakingPhoto = false
+                            cameraError =
+                                "La ubicación no es suficientemente precisa. Inténtalo nuevamente en un lugar abierto."
+                            return@addOnSuccessListener
+                        }
+
+                        val values = ContentValues().apply {
+                            put(
+                                MediaStore.Images.Media.DISPLAY_NAME,
+                                "Selfie_Triskeledu_${System.currentTimeMillis()}.jpg"
+                            )
+                            put(
+                                MediaStore.Images.Media.MIME_TYPE,
+                                "image/jpeg"
+                            )
+                            put(
+                                MediaStore.Images.Media.RELATIVE_PATH,
+                                "Pictures/AprendoIAJugando"
+                            )
+                        }
+
+                        val outputOptions =
+                            ImageCapture.OutputFileOptions.Builder(
+                                context.contentResolver,
+                                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                values
+                            ).build()
+
+                        capture.takePicture(
+                            outputOptions,
+                            ContextCompat.getMainExecutor(context),
+                            object : ImageCapture.OnImageSavedCallback {
+
+                                override fun onImageSaved(
+                                    outputFileResults: ImageCapture.OutputFileResults
+                                ) {
+                                    isTakingPhoto = false
+
+                                    val uri = outputFileResults.savedUri
+
+                                    if (uri != null) {
+                                        onCapture(
+                                            uri.toString(),
+                                            location.latitude,
+                                            location.longitude
+                                        )
+                                    } else {
+                                        cameraError =
+                                            "La foto se guardó, pero no se pudo obtener su ubicación."
+                                    }
+                                }
+
+                                override fun onError(
+                                    exception: ImageCaptureException
+                                ) {
+                                    isTakingPhoto = false
+                                    cameraError =
+                                        "Error al tomar la fotografía: ${exception.message}"
+                                }
+                            }
+                        )
+                    }.addOnFailureListener { exception ->
+                        isTakingPhoto = false
+                        cameraError =
+                            "Error al obtener ubicación: ${exception.message}"
                     }
-                )
+
+                } catch (e: SecurityException) {
+                    isTakingPhoto = false
+                    cameraError =
+                        "No hay permiso para acceder a tu ubicación."
+                }
             },
-            enabled = hasPermission && imageCapture != null && !isTakingPhoto,
+            enabled = hasPermission &&
+                    imageCapture != null &&
+                    !isTakingPhoto,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                if (isTakingPhoto) "Guardando fotografía..."
+                if (isTakingPhoto) "Obteniendo ubicación y guardando..."
                 else "Tomar selfie"
             )
         }

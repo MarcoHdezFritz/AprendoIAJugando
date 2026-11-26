@@ -416,6 +416,71 @@ class PlayerDatabaseHelper(context: Context) :
         }
     }
 
+    fun getOrCreateTouristPoint(lugar: Lugar): Int? {
+
+        val db = writableDatabase
+
+        val qrCode = lugar.qrCodigo.trim()
+        val name = lugar.nombre.trim()
+
+        if (qrCode.isBlank() || name.isBlank()) {
+            return null
+        }
+
+        // Buscar primero por código QR.
+        val existingByQr = db.rawQuery(
+            "SELECT id FROM tourist_points WHERE qr_code = ? COLLATE NOCASE LIMIT 1",
+            arrayOf(qrCode)
+        ).use {
+            if (it.moveToFirst()) it.getInt(0) else null
+        }
+
+        if (existingByQr != null) {
+            return existingByQr
+        }
+
+        // Si no existe por QR, buscar por nombre.
+        val existingByName = db.rawQuery(
+            "SELECT id FROM tourist_points WHERE name = ? COLLATE NOCASE LIMIT 1",
+            arrayOf(name)
+        ).use {
+            if (it.moveToFirst()) it.getInt(0) else null
+        }
+
+        if (existingByName != null) {
+            return existingByName
+        }
+
+        // Si es un lugar nuevo, incorporarlo a SQLite.
+        val values = ContentValues().apply {
+            put("name", name)
+            put("description", lugar.descripcion)
+            put("qr_code", qrCode)
+            put("latitude", lugar.latitud)
+            put("longitude", lugar.longitud)
+            put("active", if (lugar.activo) 1 else 0)
+        }
+
+        val newId = db.insertWithOnConflict(
+            "tourist_points",
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_IGNORE
+        )
+
+        if (newId != -1L) {
+            return newId.toInt()
+        }
+
+        // Si hubo un conflicto al insertar, volver a buscar el registro.
+        return db.rawQuery(
+            "SELECT id FROM tourist_points WHERE qr_code = ? COLLATE NOCASE LIMIT 1",
+            arrayOf(qrCode)
+        ).use {
+            if (it.moveToFirst()) it.getInt(0) else null
+        }
+    }
+
     // ------------------------------------------------
     // ESCANEO QR Y PUNTAJE
     // ------------------------------------------------

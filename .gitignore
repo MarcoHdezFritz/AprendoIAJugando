@@ -1,15 +1,45 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+
+# Android / Gradle
+.gradle/
+**/build/
 local.properties
+.externalNativeBuild/
+.cxx/
+captures/
+
+# Android Studio
+*.iml
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# Kotlin
+.kotlin/
+
+# Maven - microservicios
+**/target/
+**/out/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Claves y credenciales
+*.jks
+*.keystore
+.env
+.env.*
+!.env.example
+**/application-local.properties
+**/application-local.yml
+**/application-local.yaml
+
+# Logs
+*.log
+
+# Bases de datos H2 generadas localmente
+**/data/*.mv.db
+**/data/*.trace.db
