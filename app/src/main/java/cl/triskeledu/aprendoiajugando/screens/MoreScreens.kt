@@ -136,9 +136,12 @@ private fun InfoCard(title: String, description: String) {
 
 // 2. DETALLE DEL PUNTO TURÍSTICO
 
+
 @Composable
 fun PointDetailScreen(
     pointName: String,
+    pointDescription: String,
+    isLoadingPointDescription: Boolean,
     isUnlocked: Boolean,
     onScan: () -> Unit,
     onWatchCapsule: () -> Unit,
@@ -149,11 +152,12 @@ fun PointDetailScreen(
 
         Text("🏙️", fontSize = 76.sp)
 
-        InfoCard(
-            pointName,
-            "Este lugar forma parte de la experiencia Aprendo IA Jugando en Santiago. Explora su historia y descubre su contenido turístico."
-        )
-
+        if (!isLoadingPointDescription && pointDescription.isNotBlank()) {
+            InfoCard(
+                pointName,
+                pointDescription
+            )
+        }
         if (isUnlocked) {
             InfoCard(
                 "🎉 Lugar descubierto",

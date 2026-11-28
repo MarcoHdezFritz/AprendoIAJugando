@@ -5,7 +5,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object UsuarioRetrofitInstance {
 
-    private val BASE_URL = ApiBaseUrl.forPort(8081)
+    private val BASE_URL = ApiBaseUrl.BASE_URL
 
     val retrofit: Retrofit by lazy {
         Retrofit.Builder()

@@ -1,8 +1,5 @@
 package cl.triskeledu.aprendoiajugando.config
 
 object ApiBaseUrl {
-
-    fun forPort(port: Int): String {
-        return "http://127.0.0.1:$port/"
-    }
+    const val BASE_URL = "http://127.0.0.1:8080/"
 }

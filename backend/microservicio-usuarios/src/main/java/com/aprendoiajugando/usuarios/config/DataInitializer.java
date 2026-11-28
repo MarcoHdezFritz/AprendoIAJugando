@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
 public class DataInitializer {
+    
     @Bean
     public CommandLineRunner crearUsuariosPredefinidos(
             UsuarioRepository usuarioRepository,
@@ -55,6 +56,25 @@ public class DataInitializer {
 
             } else {
                 System.out.println("El creador de contenido ya existe.");
+            }
+
+            // Crear Cliente de prueba
+            if (!usuarioRepository.existsByAlias("ClienteTest")) {
+
+                Usuario cliente = new Usuario(
+                        "Cliente de Prueba",
+                        "000000002",
+                        "ClienteTest",
+                        TipoPerfil.CLIENTE,
+                        passwordEncoder.encode("123")
+                );
+
+                usuarioRepository.save(cliente);
+
+                System.out.println("Cliente de prueba creado correctamente.");
+
+            } else {
+                System.out.println("El cliente de prueba ya existe.");
             }
         };
     }

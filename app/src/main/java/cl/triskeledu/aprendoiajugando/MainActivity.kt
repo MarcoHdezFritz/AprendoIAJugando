@@ -119,6 +119,8 @@ class MainActivity : ComponentActivity() {
                 var playerName by remember { mutableStateOf("Jugador") }
                 var playerEmail by remember { mutableStateOf("") }
                 var currentPoint by remember { mutableStateOf("Plaza de Armas") }
+                var currentPointDescription by remember { mutableStateOf("") }
+                var isLoadingPointDescription by remember { mutableStateOf(false) }
                 var scannerReturnScreen by remember { mutableStateOf("dashboard") }
 
                 var videoTitle by remember {
@@ -167,6 +169,33 @@ class MainActivity : ComponentActivity() {
 
                         discoveries = database.getPlayerCollection(playerEmail)
                             .map { it.name }
+                    }
+                }
+
+                // Recuperar la descripción del lugar seleccionado.
+                LaunchedEffect(screen, currentPoint) {
+                    if (screen == "pointDetail") {
+                        isLoadingPointDescription = true
+                        currentPointDescription = ""
+
+                        try {
+                            val result = LugarRepository().listarLugaresActivos()
+
+                            if (result.isSuccess) {
+                                val lugar = result.getOrNull()
+                                    .orEmpty()
+                                    .firstOrNull {
+                                        it.activo &&
+                                                it.nombre.equals(currentPoint, ignoreCase = true)
+                                    }
+
+                                currentPointDescription = lugar?.descripcion.orEmpty()
+                            }
+                        } catch (e: Exception) {
+                            currentPointDescription = ""
+                        } finally {
+                            isLoadingPointDescription = false
+                        }
                     }
                 }
 
@@ -357,6 +386,8 @@ class MainActivity : ComponentActivity() {
                     // DETALLE DEL PUNTO
                     "pointDetail" -> PointDetailScreen(
                         pointName = currentPoint,
+                        pointDescription = currentPointDescription,
+                        isLoadingPointDescription = isLoadingPointDescription,
 
                         isUnlocked = discoveries.any {
                             it.equals(currentPoint, ignoreCase = true)
