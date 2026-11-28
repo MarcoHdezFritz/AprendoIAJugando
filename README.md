@@ -45,7 +45,7 @@ La aplicación móvil fue desarrollada utilizando las siguientes tecnologías:
 | Google ML Kit | Reconocimiento y lectura de códigos QR. |
 | OpenStreetMap / osmdroid | Visualización de mapas y puntos turísticos. |
 | Geolocalización Android | Obtención de la ubicación del dispositivo. |
-| Retrofit | Comunicación HTTP con los servicios backend. |
+| Retrofit | Comunicación HTTP con el backend. |
 
 ### 4.2. Arquitectura MVVM
 
@@ -60,19 +60,25 @@ Sus principales componentes son:
 
 Esta arquitectura facilita la organización del código, la separación de responsabilidades y la realización de pruebas unitarias sobre la lógica de los ViewModels y repositorios.
 
-### 4.3. Backend
+### 4.3. Backend y arquitectura de microservicios
 
-El backend está desarrollado con **Java y Spring Boot**, utilizando una arquitectura basada en tres microservicios independientes.
+El backend está desarrollado con **Java y Spring Boot**, utilizando una arquitectura basada en tres microservicios independientes, un servidor de descubrimiento de servicios y un API Gateway.
 
-| Microservicio | Responsabilidad | Puerto |
+| Componente | Responsabilidad | Puerto |
 |---|---|---:|
+| Eureka Server | Registro y descubrimiento de los servicios backend. | 8761 |
+| API Gateway | Punto de entrada para las solicitudes de la aplicación y enrutamiento hacia los microservicios. | 8080 |
 | microservicio-usuarios | Registro, autenticación y gestión de usuarios. | 8081 |
 | microservicio-productos | Administración y consulta de productos. | 8082 |
 | microservicio-lugares | Administración y consulta de puntos turísticos. | 8083 |
 
 Cada microservicio cuenta con su propio proyecto Maven, controladores REST, entidades, repositorios y una base de datos H2 independiente.
 
-La comunicación entre la aplicación Android y los microservicios se realiza mediante solicitudes HTTP utilizando Retrofit y el intercambio de información en formato JSON.
+**Eureka Server** permite registrar los microservicios y facilitar su descubrimiento dentro de la arquitectura backend.
+
+**API Gateway** centraliza las solicitudes provenientes de la aplicación Android y las enruta hacia el microservicio correspondiente, utilizando la configuración de rutas y el descubrimiento de servicios.
+
+La aplicación Android realiza sus solicitudes HTTP mediante Retrofit, comunicándose con el API Gateway a través del puerto **8080**. El intercambio de información se realiza en formato JSON.
 
 ### 4.4. API externa
 
@@ -95,6 +101,8 @@ AprendoIAJugando/
 │       └── app-release.apk
 │
 ├── backend/
+│   ├── Proyecto Eureka Server/
+│   ├── Proyecto API Gateway/
 │   ├── microservicio-usuarios/
 │   ├── microservicio-productos/
 │   └── microservicio-lugares/
@@ -112,11 +120,13 @@ AprendoIAJugando/
 
 Los tres microservicios exponen APIs REST y utilizan JSON para el intercambio de información.
 
+Las siguientes rutas corresponden a los recursos disponibles. La aplicación Android accede a ellos a través del API Gateway, utilizando el puerto 8080.
+
 ### 6.1. Microservicio de usuarios
 
-**Puerto:** `8081`
+**Puerto interno:** `8081`
 
-**URL base:** `http://localhost:8081/api/usuarios`
+**URL de acceso mediante API Gateway:** `http://localhost:8080/api/usuarios`
 
 | Método HTTP | Endpoint | Descripción |
 |---|---|---|
@@ -129,9 +139,9 @@ Los tres microservicios exponen APIs REST y utilizan JSON para el intercambio de
 
 ### 6.2. Microservicio de productos
 
-**Puerto:** `8082`
+**Puerto interno:** `8082`
 
-**URL base:** `http://localhost:8082/api/productos`
+**URL de acceso mediante API Gateway:** `http://localhost:8080/api/productos`
 
 | Método HTTP | Endpoint | Descripción |
 |---|---|---|
@@ -144,9 +154,9 @@ Los tres microservicios exponen APIs REST y utilizan JSON para el intercambio de
 
 ### 6.3. Microservicio de lugares
 
-**Puerto:** `8083`
+**Puerto interno:** `8083`
 
-**URL base:** `http://localhost:8083/api/lugares`
+**URL de acceso mediante API Gateway:** `http://localhost:8080/api/lugares`
 
 | Método HTTP | Endpoint | Descripción |
 |---|---|---|
@@ -194,6 +204,8 @@ Direcciones locales:
 
 Para conectarse desde la consola se debe utilizar la URL JDBC configurada en el archivo `application.properties` de cada microservicio.
 
+Estas consolas se consultan directamente en los puertos de los microservicios, no a través del API Gateway.
+
 ### 7.3. Persistencia local
 
 La aplicación Android también utiliza SQLite para el almacenamiento local de información.
@@ -202,18 +214,22 @@ Esto permite gestionar información en el dispositivo y complementar las operaci
 
 ## 8. Comunicación entre la aplicación y el backend
 
-La comunicación entre Android y los microservicios se implementa mediante **Retrofit**, una biblioteca que facilita el consumo de APIs REST.
+La comunicación entre Android y el backend se implementa mediante **Retrofit**, una biblioteca que facilita el consumo de APIs REST.
+
+La aplicación utiliza el API Gateway como punto de entrada para comunicarse con los microservicios.
 
 El flujo general de comunicación es:
 
 1. El usuario realiza una acción desde la interfaz.
 2. El ViewModel recibe la interacción y coordina la operación.
 3. El Repository solicita los datos correspondientes.
-4. Retrofit realiza la petición HTTP al microservicio.
-5. Spring Boot procesa la solicitud mediante su controlador.
-6. El servicio y el repositorio backend gestionan la operación sobre la base de datos.
-7. El backend devuelve una respuesta JSON.
-8. La aplicación procesa el resultado y actualiza el estado de la interfaz.
+4. Retrofit realiza la petición HTTP hacia el API Gateway mediante el puerto 8080.
+5. API Gateway recibe la solicitud y determina el servicio de destino.
+6. Eureka facilita el descubrimiento del microservicio correspondiente.
+7. Spring Boot procesa la solicitud mediante su controlador.
+8. El servicio y el repositorio backend gestionan la operación sobre la base de datos.
+9. El backend devuelve una respuesta JSON a través del Gateway.
+10. La aplicación procesa el resultado y actualiza el estado de la interfaz.
 
 ### Diferencia entre API externa y microservicios propios
 
@@ -230,41 +246,38 @@ Para ejecutar el proyecto se necesita:
 
 - Android Studio.
 - JDK compatible con la configuración de los proyectos.
-- Maven Wrapper incluido en los microservicios.
+- Maven Wrapper incluido en los proyectos backend.
 - Dispositivo Android o emulador.
+- Android SDK Platform-Tools para utilizar ADB.
 - Conexión a Internet para los servicios que utilizan APIs externas.
 
-### 9.2. Ejecución de los microservicios
+### 9.2. Ejecución del backend
 
-Cada microservicio se ejecuta independientemente.
+Para iniciar correctamente la arquitectura backend, se deben ejecutar sus componentes en el siguiente orden:
 
-Ingresar a la carpeta correspondiente:
+1. **Eureka Server:** iniciar el servidor de descubrimiento de servicios en el puerto `8761`.
+2. **Microservicio de usuarios:** iniciar el servicio en el puerto `8081`.
+3. **Microservicio de productos:** iniciar el servicio en el puerto `8082`.
+4. **Microservicio de lugares:** iniciar el servicio en el puerto `8083`.
+5. **API Gateway:** iniciar el Gateway en el puerto `8080`.
 
-**Usuarios:**
+Cada componente debe ejecutarse desde la carpeta de su respectivo proyecto Spring Boot.
 
-```powershell
-cd backend/microservicio-usuarios
-```
-
-**Productos:**
-
-```powershell
-cd backend/microservicio-productos
-```
-
-**Lugares:**
-
-```powershell
-cd backend/microservicio-lugares
-```
-
-Ejecutar el servicio desde su carpeta utilizando Maven Wrapper:
+En Windows, utilizar Maven Wrapper desde la carpeta correspondiente:
 
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
 
-Repetir el procedimiento para iniciar los tres microservicios. Cada uno debe permanecer ejecutándose en su respectiva terminal.
+Repetir el procedimiento para cada proyecto backend, manteniendo cada servicio ejecutándose en su respectiva terminal.
+
+Una vez iniciados los componentes, Eureka permite consultar el registro de servicios desde:
+
+`http://localhost:8761`
+
+El API Gateway recibe las solicitudes de la aplicación Android mediante:
+
+`http://localhost:8080`
 
 ### 9.3. Ejecución de la aplicación Android
 
@@ -276,7 +289,21 @@ Repetir el procedimiento para iniciar los tres microservicios. Cada uno debe per
 6. Ejecutar la aplicación desde Android Studio.
 7. Conceder los permisos necesarios para utilizar la cámara y la ubicación.
 
-**Importante:** si se utiliza un emulador Android, las direcciones del backend alojado en el mismo computador deben configurarse considerando la dirección de acceso del emulador. Si se utiliza un dispositivo físico, debe configurarse la dirección IP local del computador y ambos dispositivos deben tener conectividad de red.
+### 9.4. Conexión con un dispositivo Android físico mediante ADB
+
+Cuando se utiliza un dispositivo Android físico conectado al computador mediante USB, se debe habilitar la depuración USB y utilizar el siguiente comando:
+
+```bash
+adb reverse tcp:8080 tcp:8080
+```
+
+Este comando permite redirigir las solicitudes realizadas desde el puerto 8080 del dispositivo hacia el puerto 8080 del computador.
+
+De esta manera, la aplicación Android puede comunicarse con el API Gateway utilizando la dirección local configurada para el dispositivo, sin necesidad de exponer directamente los puertos internos de los microservicios.
+
+**Importante:** el comando debe ejecutarse con el dispositivo conectado y reconocido por ADB. Si se desconecta el dispositivo o se pierde la redirección, puede ser necesario ejecutar nuevamente el comando.
+
+Para utilizar un emulador Android, se debe configurar la dirección de acceso al backend considerando la dirección especial del emulador para acceder al computador anfitrión.
 
 ## 10. Pruebas unitarias y cobertura
 
@@ -343,13 +370,7 @@ El control de versiones y el almacenamiento del código fuente se gestionan medi
 
 [AprendoIAJugando - GitHub](https://github.com/MarcoHdezFritz/AprendoIAJugando)
 
-## 13. Video de presentación
-
-El proyecto contempla un video demostrativo que presenta las principales funcionalidades de la aplicación, su propósito educativo y la experiencia de usuario.
-
-El video permite visualizar el funcionamiento de los módulos principales y el valor de la solución desarrollada.
-
-## 14. Propósito académico
+## 13. Propósito académico
 
 Proyecto desarrollado para la asignatura **Desarrollo de Aplicaciones Móviles (DSY1105)**, perteneciente a la carrera Ingeniería en Informática de Duoc UC.
 
@@ -360,5 +381,6 @@ Proyecto desarrollado para la asignatura **Desarrollo de Aplicaciones Móviles (
 
 ---
 
-**Aprendo IA Jugando en Santiago**  
+**Aprendo IA Jugando en Santiago**
+
 Aplicación móvil educativa gamificada para fomentar el aprendizaje de inteligencia artificial mediante la exploración turística y actividades interactivas.
